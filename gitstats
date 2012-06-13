@@ -42,6 +42,11 @@ conf = {
 	'project_name': '',
 }
 
+AUTHORS = {
+}
+def getauthor(key):
+	return AUTHORS.get(key, key)
+
 def getpipeoutput(cmds, quiet = False):
 	global exectime_external
 	start = time.time()
@@ -249,7 +254,9 @@ class GitDataCollector(DataCollector):
 		DataCollector.collect(self, dir)
 
 		try:
-			self.total_authors += int(getpipeoutput(['git shortlog -s %s' % getcommitrange(), 'wc -l']))
+			authors = getpipeoutput(['git shortlog -s %s' % getcommitrange()]).split("\n")
+			authors = set([getauthor(a.strip().split("\t")[1]) for a in authors])
+			self.total_authors = len(authors)
 		except:
 			self.total_authors = 0
 		#self.total_lines = int(getoutput('git-ls-files -z |xargs -0 cat |wc -l'))
@@ -286,7 +293,7 @@ class GitDataCollector(DataCollector):
 			for line in output.split('\n'):
 				parts = re.split('\s+', line, 2)
 				commits = int(parts[1])
-				author = parts[2]
+				author = getauthor(parts[2])
 				self.tags[tag]['commits'] += commits
 				self.tags[tag]['authors'][author] = commits
 
@@ -302,7 +309,7 @@ class GitDataCollector(DataCollector):
 				stamp = 0
 			timezone = parts[3]
 			author, mail = parts[4].split('<', 1)
-			author = author.rstrip()
+			author = getauthor(author.rstrip())
 			mail = mail.rstrip('>')
 			domain = '?'
 			if mail.find('@') != -1:
@@ -474,7 +481,7 @@ class GitDataCollector(DataCollector):
 				pos = line.find(' ')
 				if pos != -1:
 					try:
-						(stamp, author) = (int(line[:pos]), line[pos+1:])
+						(stamp, author) = (int(line[:pos]), getauthor(line[pos+1:]))
 						self.changes_by_date[stamp] = { 'files': files, 'ins': inserted, 'del': deleted, 'lines': total_lines }
 
 						date = datetime.datetime.fromtimestamp(stamp)
@@ -530,7 +537,7 @@ class GitDataCollector(DataCollector):
 				if pos != -1:
 					try:
 						oldstamp = stamp
-						(stamp, author) = (int(line[:pos]), line[pos+1:])
+						(stamp, author) = (int(line[:pos]), getauthor(line[pos+1:]))
 						if oldstamp > stamp:
 							# clock skew, keep old timestamp to avoid having ugly graph
 							stamp = oldstamp
@@ -1330,7 +1337,7 @@ plot """
 
 class GitStats:
 	def run(self, args_orig):
-		optlist, args = getopt.getopt(args_orig, 'c:')
+		optlist, args = getopt.getopt(args_orig, 'c:m:')
 		for o,v in optlist:
 			if o == '-c':
 				key, value = v.split('=', 1)
@@ -1340,6 +1347,9 @@ class GitStats:
 					conf[key] = int(value)
 				else:
 					conf[key] = value
+			elif o == '-m':
+				key, value = v.split('=', 1)
+				AUTHORS[key] = value
 
 		if len(args) < 2:
 			print """
